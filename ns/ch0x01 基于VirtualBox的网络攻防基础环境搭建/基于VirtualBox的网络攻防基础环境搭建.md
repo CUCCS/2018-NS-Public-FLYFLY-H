@@ -41,24 +41,24 @@
   - gateway：gateway的eth1和target一样都是intnet模式，所以同样的方法配置ip地址和掩码。eth0是NAT network模式，会自动分配ip地址。==但要注意，kali默认是只开启一个网卡的，所以在配置里面要开启双网卡==<br>
   ```    
        allow-hotplug eth0
-       iface eth0 inet DHCP
+       iface eth0 inet dhcp
        allow-hotplug eth1
-       iface eth0 inet static
+       iface eth1 inet static
        address 196.168.56.101
        netmask 255.255.255.0
   ``` 
   ![](images/ip_gateway1.png)<br>
-  - attacker：attacker是是NAT network模式，会自动分配ip地址<br>
+  - attacker：attacker是NAT network模式，会自动分配ip地址<br>
   ![](images/ip_attacker.png)<br>
-  - 这时，gateway可以pingtarget和attacker。
+  - 这时，gateway可以ping通target和attacker。
 - **gateway进行ipv4转发、路由表和NAT设置**
   - 开启ipv4转发，让gateway的两个端口可以转发IP包。在gateway的```/proc/sys/net/ipv4/ip_forward```文件里面写上```1```,或者直接在命令行输入 
   ```
     echo 1 > /proc/sys/net/ipv4/ip_forward
   ```
-    并对```/etc/sysctrl.conf```文件里的```net.ipv4.ip_forward=1```这一行取消注释。
+    并对```/etc/sysctl.conf```文件里的```net.ipv4.ip_forward=1```这一行取消注释。
   [参考](https://blog.csdn.net/yuanbinquan/article/details/76228312)
-  - 配置路由表，添加一条路由：目标地址是10.0.2.0/24这一网段的消息由eth0进行转发。[参考](https://computingforgeeks.com/different-ways-of-configuring-static-routes-in-linux/)<br>
+  - ~~配置路由表，添加一条路由：目标地址是10.0.2.0/24这一网段的消息由eth0进行转发。[参考](https://computingforgeeks.com/different-ways-of-configuring-static-routes-in-linux/)~~（==这里不必要配置路由表，具体理由见实验问题第三点==）<br>
   ```
    route add -net 10.0.2.0 netmask 255.255.255.0 dev eth0
   ```
@@ -70,9 +70,9 @@
   ```
   查看NAT table<br>
    ![](images/gateway_nattable.png)<br>
-- **网关配置DNS域名服务器**
+- **target配置DNS域名服务器**
    - 这时，gateway和target都可以ping网络的IP地址，但是不能直接ping域名，是因为没有配置域名解析服务器。
-   在文件```etc\resolv.conf```文件里面填写一个公共服务器，这里写的是谷歌公共服务器<br>
+   在文件```etc/resolv.conf```文件里面填写一个公共DNS服务器地址<br>
     ![](images/gateway_nameserver.png)<br>
 ## 实验结果
 - [x]   target可以直接访问attacker<br>
@@ -93,4 +93,7 @@
 ## 实验问题
    - **host-only网络模式和intnet网络模式的选择**。刚开始实验时选择了host-only。在配置完成后，在attacker ping target时，本应该不成功，但是却成功了。在gateway的两个端口监听并没有流量经过。tracerouter路径之后发现，ping request包时通过NAT network网络的网关传到target的。<br>
    解决方法：在宿主机上找到NAT network虚拟网卡，禁用 IP 转发或部署防火墙规则禁止从攻击者主机的数据包进入靶机的 Host-only 网络。但是我在宿主机上并没有找到NAT network的虚拟网卡，ifconfig也没有显示，只发现了host-only的虚拟网卡。为了以后方便进行实验和网络拓扑，我选择将host-only换成intnet网络。
-   - **网关转发问题**。在target ping attacker时，设置好ipv4转发之后gateway仍不能将包转发给attacker。是因为没有添加路由，gateway不知道应该把这个包转发给谁就扔掉了。且添加路由之后还要配置NAT才能上网。
+   - **网关转发问题**。在target ping attacker时，设置好ipv4转发之后gateway仍不能将包转发给attacker。是因为没有添加路由，gateway不知道应该把这个包转发给谁就扔掉了。且添加路由之后还要配置NAT才能上网
+   - **关于实验中配置添加路由的问题**。在我的第一次实验报告中，是手动添加了一条路由10.0.2.0，在老师的批改后以及自己思考之后觉得是不需要手动添加路由的。但是在我将这条手动添加的路由删掉之后ping网关就不成功了。我重新进行实验，看一下自己有没有遗漏配置步骤。果然，我忘记给eth1配置默认网关了，在给eth1配置默认网关10.0.2.4（eth0的IP)之后，这条路由就默认生成了（==对于DHCP，局域网接口的路由条目是会自动添加的。操作系统的网络协议栈根据你的IP/netmask/网卡标识就可以自动生成一条路由规则==）。关于路由表中一条路由的网关系统自动设置成0.0.0.0应该是为了实现网卡IP变更，只要网卡标识不变，就不需要变更路由信息的效果。
+   - **DHCP方式管理的网卡**，用ifdown eth0 && ifup eth0的方式重启网卡配置。有时候网络连不通可以用这个方法，亲测有效。
+   - **虚拟机的网卡排查顺序**。检查虚拟网络设置是否正确——>虚拟机里网卡是否正确获取了新网络配置，避免只改了虚拟网络设置，但虚拟机内的系统没有及时更新网络配置。
