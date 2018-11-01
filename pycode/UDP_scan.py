@@ -17,7 +17,7 @@ def udp_scan(dst_ip,dst_port,dst_timeout):
             if (str(type(item))!="<type 'NoneType'>"):
                 udp_scan(dst_ip,dst_port,dst_timeout)
         print "Open|Filtered"
-    elif (udp_scan_resp.haslayer(UDP)):
+    elif (udp_scan_resp.haslayer(UDP))or udp_scan_resp.getlayer(IP).proto == IP_PROTOS.udp:
         print "Open"
     elif(udp_scan_resp.haslayer(ICMP)):
         if(int(udp_scan_resp.getlayer(ICMP).type)==3 and int(udp_scan_resp.getlayer(ICMP).code)==3):
